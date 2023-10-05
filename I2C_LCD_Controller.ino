@@ -9,18 +9,29 @@
  * 
  */
 
+ /*
+  * This sketch was tested with Arduino Uno, there is no garantee this will work on other boards
+  * -------Pinout-------
+  * LCD             Arduino
+  * VCC             5V
+  * GND             GND
+  * SCL             A5
+  * SDA             A4
+  */
+
 #include <Wire.h>
 
 byte startCmd = B00110000;
 byte address = 63; //LCD address
 
 char charBuffer[32]; 
-String startupMsg = "Wristband Erase v0.1";
+String startupMsg = "Welcome";
 byte result = 0;
 int reading = 0;
 byte incomingByte = 0;
+bool cmdMode = false;
 
-//setup command fund in HJ1602A manual 
+//setup command found in HJ1602A manual 
 void setup() {
   delay(15);
   Wire.begin();
@@ -65,7 +76,7 @@ void setup() {
   delayMicroseconds(40);
   
   //Write Startup Message
-  lcdWrite(startupMsg);ede
+  lcdWrite(startupMsg);
 
 }
   
@@ -73,21 +84,169 @@ void loop() {
   
         // send data only when you receive data:
         if (Serial.available() > 0) {
-                // read the incoming byte:
-                incomingByte = Serial.read();
+          //Awaiting a command to control LCD
+          if(cmdMode){
+              String cmd = Serial.readString();
+              cmd.trim();
+              Serial.println("Command received:" + cmd);
 
-                // say what you got:
-                Serial.print("I received: ");
-                Serial.println(incomingByte, DEC);
-               if (incomingByte != 10){
+                //Clear the display
+                if(cmd == "clr"){
+                  clearScreen();
+                }
+                //New line
+                else if (cmd == "nl"){
+                  newLine();
+                }
+                //Cursor left
+                else if (cmd == "cl"){
+                  cursorLeft();
+                }
+                //Cursor Right
+                else if (cmd == "cr"){
+                  cursorRight();
+                }
+                //Display shift left
+                else if (cmd == "dl"){
+                  displayLeft();
+                }
+
+                //Shift display right
+                else if (cmd == "dr"){
+                  displayRight();
+                }
+
+                //Display home
+                else if (cmd == "hm"){
+                  displayHome();
+                }
+
+                //Cursor off
+                else if (cmd == "coff"){
+                  cursorOff();
+                }
+
+                //Cursor on/Turn off blinking
+                else if (cmd == "con"){
+                  cursorOn();
+                }
+
+                //Cursor on/Turn on blinking
+                else if (cmd == "cblink"){
+                  cursorBlink();
+                }
+
+              
+              //Turn of command mode and clear incoming byte
+              cmdMode = false;
+              Serial.flush();
+            }
+
+            // read the incoming byte:
+            incomingByte = Serial.read();
+            // say what you got:
+            Serial.print("I received: ");
+            Serial.println(incomingByte, DEC);
+            switch (incomingByte) {
+              case 10:
+                Serial.println("Serial message complete");
+                cmdMode = false;
+                Serial.flush();
+                break;
+
+              //Activate command mode with ! char
+              case 33:
+                cmdMode = true;
+                Serial.println("Command mode activated");
+                break;
+
+              case 255:
+                break;
+              
+              //Write character to LCD screen
+              default:         
                 dWrite(incomingByte,3);
-               }
+                break;
+            }
+
         }
   
 }
 
-void lcdWrite(String message){
+//Function to call to clear the screen
+//Use command !clr
+void clearScreen(){
+    //Clear
+  dWrite(B00000001,1); 
+  delay(2);
 
+  //Entry Mode
+  dWrite(B00000110,1);
+  delayMicroseconds(40);
+}
+
+//Set to new line on display
+void newLine(){
+  dWrite(B10101000,1);
+  delay(5);
+}
+
+//Previous line
+void prevLine(){
+  dWrite(B10101000,1);
+  delay(5);
+}
+
+//Move cursor left
+void cursorLeft(){
+  dWrite(B00010000,1);
+  delay(5);
+}
+
+//Move cursor right
+void cursorRight(){
+  dWrite(B00010100,1);
+  delay(5);
+}
+
+//Shift all display text left
+void displayLeft(){
+  dWrite(B00011000,1);
+  delay(5);
+}
+
+//Shift all display text right
+void displayRight(){
+  dWrite(B00011100,1);
+  delay(5);
+}
+
+//Move display and cursor back to home position
+void displayHome(){
+  dWrite(B00000010,1);
+  delay(5);
+}
+
+//Turn off cursor
+void cursorOff(){
+  dWrite(B00001100,1);
+  delay(5);
+}
+
+//Turn on cursor
+void cursorOn(){
+  dWrite(B00001110,1);
+  delay(5);
+}
+
+//Turn on cursor and have it blink
+void cursorBlink(){
+  dWrite(B00001111,1);
+  delay(5);
+}
+
+void lcdWrite(String message){
+  Serial.print("Writing to lcd");
   //Write the message
    message.toCharArray(charBuffer,32);
    for(int i =0; i<=(message.length()-1); i++){  
@@ -169,7 +328,7 @@ byte dWrite(byte data, int enable) {
    Serial.println();
     
   }
-
+  //Write characters
   else if(enable == 3){
     Wire.beginTransmission(0x3F);
     Wire.write(cmdHigh|lcd|dRs|dEn);
